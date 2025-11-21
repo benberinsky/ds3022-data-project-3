@@ -36,13 +36,14 @@ class AlpacaKafkaProducer:
     # closing connection
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.producer:
+            self.producer.flush()
             self.producer.close()
+
 
     def send_event(self, trade):
         try:
-            # Extract key from the event (using id if available, otherwise generate one)
-            key = str(trade.timestamp)
-            timestamp = trade.timestamp
+            timestamp = trade.timestamp.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            key = f"{trade.symbol}_{timestamp}"
             trade_symbol = trade.symbol
             price = trade.price
             size = trade.size
@@ -83,12 +84,12 @@ class AlpacaKafkaProducer:
         # Subscribe to trade updates for tech stocks
         stream.subscribe_trades(
             self.trade_callback,
-            'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META'
+            'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'TSLA'
         )
         
         
         print("Connecting to Alpaca stream...")
-        print("Watching: AAPL, MSFT, GOOGL, AMZN, META")
+        print("Watching: AAPL, MSFT, GOOGL, AMZN, META, NVDA, TSLA")
         print("Press Ctrl+C to stop\n")
         
         # Start the stream
@@ -96,5 +97,8 @@ class AlpacaKafkaProducer:
 
 if __name__ == "__main__":
     producer = AlpacaKafkaProducer()
-    with producer:
-        asyncio.run(producer.main())
+    try:
+        with producer:
+            asyncio.run(producer.main())
+    except KeyboardInterrupt:
+        logger.info("Shutting down gracefully...")
