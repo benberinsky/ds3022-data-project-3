@@ -1,8 +1,6 @@
 from quixstreams import Application
 import json
-import time
 import os
-import pandas as pd
 from datetime import datetime
 import duckdb
 
@@ -20,42 +18,52 @@ conn.execute("""CREATE TABLE IF NOT EXISTS trades(
             size INTEGER)
             """)
 
-def insert_trade_record(conn, key, offset, value):
-    """Insert a trade record into DuckDB"""
-    try:
-        action = value.get('action', 'unknown')
+# Batch storage - persists across function calls
+batch = []
+BATCH_SIZE = 100
 
+def insert_trade_record(conn, key, offset, value):
+    """Insert a trade record into DuckDB (batched)"""
+    global batch
+    try:
         # Pulling individual variables from value
         timestamp = datetime.strptime(value["timestamp"], "%Y-%m-%d %H:%M:%S.%f")
         trade_symbol = value['trade_symbol']
         price = value['price']
         size = value['size']
 
-        #Write out to DuckDB
-        #conn.execute(
-       #"INSERT INTO trades (time, trade_symbol, price, size) VALUES (?, ?, ?, ?)",
-       #(timestamp, trade_symbol, price, size),)
-        #conn.commit()
-
-        batch = []
-        batch_size = 100
-
-        # Collect messages
+        # Add to batch (id will auto-increment)
         batch.append((timestamp, trade_symbol, price, size))
 
-        # When batch is full
-        if len(batch) >= batch_size:
+        # When batch is full, insert all at once
+        if len(batch) >= BATCH_SIZE:
             conn.executemany(
-                "INSERT INTO trades VALUES (?, ?, ?, ?)", 
+                "INSERT INTO trades (time, trade_symbol, price, size) VALUES (?, ?, ?, ?)", 
                 batch
             )
             conn.commit()
+            print(f"Inserted batch of {len(batch)} records")
             batch.clear()
              
         return True
     except Exception as e:
         print(f"Error inserting record: {e}")
         return False
+
+def flush_batch(conn):
+    """Flush any remaining records in the batch"""
+    global batch
+    if batch:
+        try:
+            conn.executemany(
+                "INSERT INTO trades (time, trade_symbol, price, size) VALUES (?, ?, ?, ?)", 
+                batch
+            )
+            conn.commit()
+            print(f"Flushed final batch of {len(batch)} records")
+            batch.clear()
+        except Exception as e:
+            print(f"Error flushing batch: {e}")
 
 def main():
     app = Application(
@@ -81,7 +89,7 @@ def main():
 
                 #print(f"{offset} {key} {value}")
                 
-                # Insert into MySQL
+                # Insert into DuckDB (batched)
                 if insert_trade_record(conn, key, offset, value):
                     print(f"Inserted record {offset} into DuckDB")
                 else:
@@ -93,8 +101,10 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        pass
+        print("\nShutting down gracefully...")
     finally:
+        flush_batch(conn)  # Flush any remaining records
         conn.commit()
         conn.close()
+        print("DuckDB connection closed")
 

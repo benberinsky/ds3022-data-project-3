@@ -27,6 +27,7 @@ class AlpacaKafkaProducer:
             broker_address = KAFKA_BROKER
         )
         self.producer = None
+        self.stream = None
 
     # getting producer when opening connection
     def __enter__(self):
@@ -35,9 +36,29 @@ class AlpacaKafkaProducer:
     
     # closing connection
     def __exit__(self, exc_type, exc_val, exc_tb):
+        # Close Alpaca stream first
+        if self.stream:
+            try:
+                # Stop the stream if it's running
+                if hasattr(self.stream, 'stop'):
+                    self.stream.stop()
+                # Close the WebSocket connection if it exists
+                if hasattr(self.stream, '_ws') and self.stream._ws:
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            asyncio.create_task(self.stream._ws.close())
+                        else:
+                            loop.run_until_complete(self.stream._ws.close())
+                    except Exception:
+                        pass
+            except Exception as e:
+                logger.warning(f"Error closing Alpaca stream: {e}")
+        
+        # Close Kafka producer
         if self.producer:
             self.producer.flush()
-            self.producer.close()
+            # Producer cleanup is handled automatically - no close() method needed
 
 
     def send_event(self, trade):
@@ -74,7 +95,7 @@ class AlpacaKafkaProducer:
     
     async def main(self):
         # Initialize stream
-        stream = Stream(
+        self.stream = Stream(
             key_id=API_KEY,
             secret_key=API_SECRET,
             data_feed='iex',  # Free IEX data feed
@@ -82,7 +103,7 @@ class AlpacaKafkaProducer:
         )
         
         # Subscribe to trade updates for tech stocks
-        stream.subscribe_trades(
+        self.stream.subscribe_trades(
             self.trade_callback,
             'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'TSLA'
         )
@@ -92,8 +113,15 @@ class AlpacaKafkaProducer:
         print("Watching: AAPL, MSFT, GOOGL, AMZN, META, NVDA, TSLA")
         print("Press Ctrl+C to stop\n")
         
-        # Start the stream
-        await stream._run_forever()
+        try:
+            # Start the stream
+            await self.stream._run_forever()
+        except ValueError as e:
+            if "connection limit exceeded" in str(e).lower():
+                logger.error("Connection limit exceeded")
+                raise
+            else:
+                raise
 
 if __name__ == "__main__":
     producer = AlpacaKafkaProducer()
@@ -102,3 +130,11 @@ if __name__ == "__main__":
             asyncio.run(producer.main())
     except KeyboardInterrupt:
         logger.info("Shutting down gracefully...")
+    except ValueError as e:
+        if "connection limit exceeded" in str(e).lower():
+            logger.error("Failed to connect. Please wait a few minutes and try again.")
+        else:
+            raise
+    except Exception as e:
+        logger.exception(f"Unexpected error: {e}")
+        raise
