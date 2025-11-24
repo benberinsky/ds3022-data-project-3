@@ -24,7 +24,6 @@ df["seconds"] = df["time"].dt.hour * 3600 + df["time"].dt.minute * 60 + df["time
 
 print(f"Loaded {len(df)} trade records")
 
-
 # ============================================================
 # 2. DENSITY PLOT OF VOLUME BY TIME OF DAY
 # ============================================================
