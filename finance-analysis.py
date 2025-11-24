@@ -53,7 +53,9 @@ print("Saved plot: trade_activity_density.png")
 df["return"] = df.groupby("trade_symbol")["price"].pct_change()
 
 # Pivot to time-indexed returns matrix
-returns = df.pivot(index="time", columns="trade_symbol", values="return")
+#returns = df.pivot(index="time", columns="trade_symbol", values="return")
+returns = df.groupby(['time', 'trade_symbol'])['return'].mean().unstack()
+
 
 # Equal-weight market return
 returns["market"] = returns.mean(axis=1)
@@ -114,6 +116,12 @@ for window in [10, 30, 60]:
     for symbol, beta_val in betas[window].items():
         print(f"{symbol}: {beta_val:.4f}")
     print()
+
+print("\n==================== DATA SUMMARY ====================")
+for symbol in symbols:
+    count = returns[symbol].dropna().shape[0]
+    print(f"{symbol}: {count} return observations")
+print(f"Market: {returns['market'].dropna().shape[0]} return observations")
 
 
 # ============================================================

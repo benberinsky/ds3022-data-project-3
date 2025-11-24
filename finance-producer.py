@@ -58,7 +58,6 @@ class AlpacaKafkaProducer:
         # Close Kafka producer
         if self.producer:
             self.producer.flush()
-            # Producer cleanup is handled automatically - no close() method needed
 
 
     def send_event(self, trade):

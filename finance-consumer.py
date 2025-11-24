@@ -10,8 +10,10 @@ KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "stock-trades-raw")
 conn = duckdb.connect(database='trades_info.duckdb', read_only=False)
 print("DuckDB connection successful")
 
-conn.execute("""CREATE TABLE IF NOT EXISTS trades(
-            id INTEGER PRIMARY KEY,
+conn.execute("CREATE SEQUENCE trade_id_seq START 1")
+#conn.execute("DROP TABLE IF EXISTS trades")
+conn.execute("""CREATE TABLE trades(
+            id INTEGER PRIMARY KEY DEFAULT nextval('trade_id_seq'),
             time TIMESTAMP,
             trade_symbol VARCHAR,
             price DOUBLE,
