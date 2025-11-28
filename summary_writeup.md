@@ -13,3 +13,18 @@ Necessary components:
 ### Names: 
 Benjamin Berinsky, Will Wert
 
+### Data Source: 
+For our project we used the Alpaca trading API. The API provided us with live streaming information about trades, including the company abbreviation of the trade, the price(in USD), the size(how many shares were traded), and the timestamp at which the trade was made. 
+
+### Challenges
+- One challenge we faced in this project was ...
+- For our tools, we used Kafka to produce and consume the data from the live streaming API by filtering out which companies we would keep, and then writing out the trades to a table in DuckDB to perform our analysis. 
+
+### Analysis
+
+
+### Github repo link
+
+
+### Plot
+
