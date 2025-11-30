@@ -1,0 +1,15 @@
+quixstreams
+requests_sse
+redis
+confluent-kafka
+duckdb
+pandas
+matplotlib
+numpy
+alpaca-trade-api
+scipy
+json
+os
+datetime
+logging
+
