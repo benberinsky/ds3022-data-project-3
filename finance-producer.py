@@ -13,10 +13,12 @@ API_KEY = os.getenv("API_KEY")
 API_SECRET = os.getenv("API_SECRET")
 print(f"Broker: {KAFKA_BROKER}, Topic: {KAFKA_TOPIC}, Key: {API_KEY}")
 
+# Configuring logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',)
 
+# Creating instance of logger
 logger = logging.getLogger(__name__)
 
 
@@ -59,8 +61,9 @@ class AlpacaKafkaProducer:
         if self.producer:
             self.producer.flush()
 
-
+    # Function to send event to kafka
     def send_event(self, trade):
+        # Extracting vars from trade to send
         try:
             timestamp = trade.timestamp.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
             key = f"{trade.symbol}_{timestamp}"
@@ -86,6 +89,7 @@ class AlpacaKafkaProducer:
         except Exception as e:
             logger.exception(f"Error processing message: {e}")
 
+    # Sending each trade
     async def trade_callback(self,trade):
         """Called every time a trade happens"""
         self.send_event(trade)
@@ -97,7 +101,7 @@ class AlpacaKafkaProducer:
         self.stream = Stream(
             key_id=API_KEY,
             secret_key=API_SECRET,
-            data_feed='iex',  # Free IEX data feed
+            data_feed='iex',
             raw_data=False
         )
         
