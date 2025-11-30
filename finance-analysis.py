@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 con = duckdb.connect("trades_info.duckdb")
 df = con.execute("SELECT time, trade_symbol, price, size FROM trades").df()
 
+
 # Check if we have data
 if df.empty:
     print("ERROR: No data found in trades table")
@@ -46,83 +47,84 @@ print("Saved plot: trade_activity_density.png")
 
 
 # ============================================================
-# 3. COMPUTE RETURNS FOR BETA CALCULATION
+# 3. PRICE STATISTICS (High, Low, Median)
 # ============================================================
 
-# Percent returns by stock
-df["return"] = df.groupby("trade_symbol")["price"].pct_change()
+print("\n===== PRICE STATISTICS =====")
 
-# Pivot to time-indexed returns matrix
-#returns = df.pivot(index="time", columns="trade_symbol", values="return")
-returns = df.groupby(['time', 'trade_symbol'])['return'].mean().unstack()
+price_stats = (
+    df.groupby("trade_symbol")["price"]
+    .agg(["max", "min", "median"])
+    .rename(columns={"max": "High", "min": "Low", "median": "Median"})
+)
 
-
-# Equal-weight market return
-returns["market"] = returns.mean(axis=1)
-
-
-# ============================================================
-# 4. FUNCTION TO COMPUTE BETA
-# ============================================================
-
-def compute_beta(stock_ret, market_ret):
-    """Compute beta = Cov(stock, market) / Var(market)."""
-    joined = pd.concat([stock_ret, market_ret], axis=1).dropna()
-    if len(joined) < 2:
-        return np.nan
-    cov = np.cov(joined.iloc[:, 0], joined.iloc[:, 1])[0, 1]
-    var = np.var(joined.iloc[:, 1])
-    return cov / var if var != 0 else np.nan
-
+for symbol, row in price_stats.iterrows():
+    print(f"\n{symbol}:")
+    print(f"  Daily High Price:  {row['High']:.4f}")
+    print(f"  Daily Low Price:   {row['Low']:.4f}")
+    print(f"  Median Price:      {row['Median']:.4f}")
 
 # ============================================================
-# 5. COMPUTE 10-, 30-, 60-PERIOD BETAS
+# 4. RETURN + VOLATILITY CALCULATIONS
 # ============================================================
 
-betas = {10: {}, 30: {}, 60: {}}
+returns_data = []
 
-symbols = [c for c in returns.columns if c != "market"]
+for symbol, group in df.groupby("trade_symbol"):
+    group = group.sort_values("time")
 
-for symbol in symbols:
-    for window in [10, 30, 60]:
-        # Get the last window of data for this symbol and market
-        stock_ret = returns[symbol].dropna()
-        market_ret = returns["market"].dropna()
-        
-        # Align the series by time index
-        aligned = pd.concat([stock_ret, market_ret], axis=1).dropna()
-        
-        if len(aligned) < window:
-            betas[window][symbol] = np.nan
-            continue
-            
-        # Get the last window of data
-        stock_window = aligned.iloc[-window:, 0]
-        market_window = aligned.iloc[-window:, 1]
-        
-        # Compute beta on the actual returns, not means
-        beta_val = compute_beta(stock_window, market_window)
-        betas[window][symbol] = beta_val
+    # compute returns using consecutive trades
+    group["return"] = group["price"].pct_change()
 
+    mean_return = group["return"].mean()
+    vol = group["return"].std()
+
+    if vol is None or np.isnan(vol):
+        ratio = np.nan
+    else:
+        ratio = mean_return / vol
+
+    returns_data.append([symbol, mean_return, vol, ratio])
+
+returns_df = pd.DataFrame(
+    returns_data, 
+    columns=["Symbol", "MeanReturn", "Volatility", "ReturnVolRatio"]
+)
+
+print("\n===== RETURN & VOLATILITY SUMMARY =====")
+print(returns_df)
 
 # ============================================================
-# 6. PRINT BETAS
+# 5. BAR CHART: VOLATILITY
 # ============================================================
 
-print("\n==================== BETAS ====================\n")
+plt.figure(figsize=(10, 6))
+plt.bar(returns_df["Symbol"], returns_df["Volatility"])
+plt.title("Volatility of Returns by Security")
+plt.xlabel("Ticker")
+plt.ylabel("Volatility (Std Dev of Returns)")
+plt.grid(axis="y", linestyle="--", alpha=0.5)
+plt.tight_layout()
+plt.savefig("volatility_bar_chart.png")
+plt.close()
 
-for window in [10, 30, 60]:
-    print(f"--- {window}-Period Beta Estimates ---")
-    for symbol, beta_val in betas[window].items():
-        print(f"{symbol}: {beta_val:.4f}")
-    print()
+print("Saved plot: volatility_bar_chart.png")
 
-print("\n==================== DATA SUMMARY ====================")
-for symbol in symbols:
-    count = returns[symbol].dropna().shape[0]
-    print(f"{symbol}: {count} return observations")
-print(f"Market: {returns['market'].dropna().shape[0]} return observations")
+# ============================================================
+# 6. BAR CHART: RETURN / VOLATILITY
+# ============================================================
 
+plt.figure(figsize=(10, 6))
+plt.bar(returns_df["Symbol"], returns_df["ReturnVolRatio"])
+plt.title("Return / Volatility Ratio by Security")
+plt.xlabel("Ticker")
+plt.ylabel("Return-to-Volatility Ratio")
+plt.grid(axis="y", linestyle="--", alpha=0.5)
+plt.tight_layout()
+plt.savefig("return_vol_ratio_bar_chart.png")
+plt.close()
+
+print("Saved plot: return_vol_ratio_bar_chart.png")
 
 # ============================================================
 # DONE
