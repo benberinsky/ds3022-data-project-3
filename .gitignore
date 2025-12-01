@@ -1,0 +1,9 @@
+*
+
+# Defining files to be pushed to final repo
+!scripts/
+!plots/
+!README.md
+!requirements.txt
+!.gitignore
+
